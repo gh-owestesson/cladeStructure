@@ -1,7 +1,7 @@
-cat alignments/all.stk | python/nameInternals.py groups/A.group groups/B.group groups/C.group groups/PV.group > tree.newick
+<<A Makefile will soon be here.  For now just storing key commands...>> 
 
-python/autoAnnotate.py -seqs alignments/all.stk -groups groups/A.group groups/B.group groups/C.group groups/PV.group -names A B C PV -gff gff/all.gff > annos.stk
+cat alignments/all.stk | python/nameInternals.py groups/A.group groups/B.group groups/C.group groups/PV.group > alignments/HRVtrain.stk
 
-cat tree.newick	> alignments/HRVtrain.stk
-cat annos.stk >> alignments/HRVtrain.stk
+python/autoAnnotate.py -seqs alignments/all.stk -groups groups/A.group groups/B.group groups/C.group groups/PV.group -names A B C PV -gff gff/all.gff >> alignments/HRVtrain.stk
+
 cat alignments/all.stk |grep -v NH >> alignments/HRVtrain.stk 

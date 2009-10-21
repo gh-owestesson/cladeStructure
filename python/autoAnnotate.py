@@ -1,0 +1,90 @@
+#!/usr/bin/python
+import sys
+from extra_functions import *
+from alignment2dict import get_stockholm, write_stockholm
+
+usage = '''
+autoannotate.py -seqs alignment.stk -groups groupfile1 groupfile2 -structures GFF_file -names name1 name2
+'''
+
+
+args = get_cmd_args()
+
+if 'h' in args.keys():
+    print usage; sys.exit()
+log=False
+if args.get('log'):
+    log = True
+if log:
+    print '\nArguments read in from command line:'
+    for arg in args:
+        print arg,':',args[arg]
+    print '\n'
+seqDict = get_stockholm(args['seqs'])
+alignLength = len(seqDict.values()[0])
+if log:
+    print '%s sequences of length %s imported'%(len(seqDict.keys()), alignLength)
+
+groupFiles = args['groups']
+if not args.get('names'):
+    groupNames = [ i.replace('.group','') for i in groupFiles ]
+else:
+    groupNames = args['names']
+groups = [ [ i.strip() for i in open(filename).readlines() ] for filename in groupFiles]
+
+if log:
+    print "\nGroups and their members:"
+    for i,group in enumerate(groupNames):
+        print group,':', groups[i]
+        print '\n'
+#parse GFF file
+structDict = {}
+for line in open(args['gff']).readlines():
+    l = line.strip().split()
+    if len(l) < 9:
+        continue
+    if not l[2] == 'structure':
+        continue
+    try:
+        
+        start, end, clade =\
+               int(l[3])-1, int(l[4])-1, l[8].replace('Name=','')
+    except:
+        sys.stderr.write('Could not parse GFF line: ' +l+'\n')
+    if structDict.get(clade):
+        structDict[clade].append((start,end))
+    else:
+        structDict[clade] = [(start,end)]
+if log:
+    print '\nGFF info imported:'
+    for struct in structDict.keys():
+        print 'clade', struct,':', structDict[struct]
+
+check_nonoverlap(structDict) # structures must not be overlapping!
+
+cladeLines = {}
+cladeLines['root_N'] = ''
+for position in range(alignLength):
+    someClade = False
+    for group in groupNames + ['root']:
+        if not unique([ within(position, structure) for structure in structDict[group]]) == [False]:
+            someClade = True
+            cladeLines['root_N'] += '.'
+            if cladeLines.get(group):
+                cladeLines[group] += '1'
+            else:
+                cladeLines[group] = '0'*position+'1'
+
+        else:
+            if cladeLines.get(group):
+                cladeLines[group] += '0'
+            else:
+                cladeLines[group] = '0'*position+'0'
+            
+    if not someClade:
+        cladeLines['root_N'] += '-'
+for clade in  cladeLines:
+    if not clade =='root_N':
+        print "#=GC    S_"+clade+'_structBin' , '\t', cladeLines[clade]
+    else:
+        print "#=GC   "+clade , '\t', cladeLines[clade]
