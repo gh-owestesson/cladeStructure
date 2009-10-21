@@ -194,7 +194,7 @@
 								   (?
 								    (= (. SRC1 SRC2) (. DEST1 DEST2))
 								    ()
-								    (mutate (from (SRC1 SRC2)) (to (DEST1 DEST2)) (rate (. TYPE _ rate) * (. p DEST1 DEST2)))))))))))
+								    (mutate (from (SRC1 SRC2)) (to (DEST1 DEST2)) (rate (. TYPE _ rate) * (. p_ TYPE DEST1 DEST2)))))))))))
 
 (alphabet
  (name RNA)
