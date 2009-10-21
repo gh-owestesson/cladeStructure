@@ -1,0 +1,9 @@
+# STOCKHOLM 1.0
+#=GF NH                    ((A:0.1000000000,B:0.1000000000)AB:0.1000000000,(C:0.1000000000,D:0.1000000000)CD:0.1000000000)root;
+#=GF SC_max_CladeStructure -119.883
+A                          ATTAAACGAACTCTGGT
+B                          AGAACACGAAGCATATT
+C                          AAAAAACGATCCTTTTT
+D                          AAAAAACGATCCTTTTT
+#=GC S_AB_structBin        11111111111111111
+//
