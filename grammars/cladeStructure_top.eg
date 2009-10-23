@@ -1,0 +1,266 @@
+(grammar
+ (name CladeStructure)
+ (parametric)
+
+ ;; Rate parameters
+ (rate
+  (regular_rate 1)
+  (slow_rate 0.1))
+
+ ;; Probability parameters
+ (pgroup
+  ((stayProb .5) (leaveProb .5)) ;; probability of staying in or leaving a nonstructural regime
+  ((N2Nprob .5) (N2Sprob .5))  ;; probability of generating a structural regime (N2S), or simply another nonstructural regime (N2N), given that you left a nonstructural regime
+  ((beginStem 0.1) (lengthenStem 0.9))
+  ((stem 0.9) (loop 0.1))
+  ((nonNEST .1) (NEST .9)) ;; probability of additional nested stem pairs, within a structural regime
+
+  ;; Initial distribution over single-character states
+  ((&foreach-token TOK ((. p TOK) (/ 1 &TOKENS))))
+
+  ;; Initial distribution over di-character states
+  ((&foreach-token TOK1 
+		   (&foreach-token TOK2
+				   ((. p_regular TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS))))))
+  ((&foreach-token TOK1 
+		   (&foreach-token TOK2
+				   ((. p_slow TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS)))))) ) ;; end pgroup
+
+ ;; Define hybrid chains foreach ancestor.  
+ ;; Each one will have a hybrid nucleotide and a hybrid structural chain.
+ (&foreach-ancestor NODE
+		    ;; Nonstructural: use NUC_regular and NUC_slow chains
+		    (hybrid-chain
+		     (terminal ((. hybrid_ NODE _NUC)))
+		     (row (. : NODE))
+		     (components
+		      ((label 0) (terminal (NUC_regular)))
+		      ((label 1) (terminal (NUC_slow)))))
+
+
+		    ;; Structural hybrid: use LNUC_{slow,regular} RNUC_{slow,regular}, etc 
+
+		    (hybrid-chain
+		     (terminal ((. hybrid_ NODE _LNUC) (. hybrid_ NODE _RNUC)))
+		     (row (. : NODE))
+		     (components
+		      ((label 0) (terminal (LNUC_regular RNUC_regular)))
+		      ((label 1) (terminal (LNUC_slow RNUC_slow)))))) ;; end NODE loop
+
+ ;; Higher-level production rules: 
+ ;;   basically, there are N nonterminals for each internal node, which emit hybrid nucleotides
+ ;;   and S states which emit hybrid structures.  S states are transformed via pfold-like rules.
+ ;;   Rules relating S and N are like this:
+ ;;   N_i -> xN_i*
+ ;;   N_i* -> N_i (prob stayProb)
+ ;;   N_i* -> N_j (j!= i) (prob leaveProb)
+
+ ;;                     N_i* -> S_j_new_k_bif (prob N2S)                
+ ;;                     S_j_new_k_bif -> S_j new_k
+
+ ;;                     new_k -> S_k
+ ;;                     new_k -> N_k
+ ;;                     new_k -> ()
+
+
+
+ ;; NODE: Main loop over branches
+ (&foreach-ancestor
+  NODE
+;;  (nonterminal (. NEW_ NODE))  ; must I declare nonterminals here? 
+
+  ;; TYPE: loop over transitions into structural states (S or N) from START
+  (&foreach TYPE (N S)
+	    (transform (from (TOP)) (to ((. TYPE _ NODE _TOP_bif))) (prob (/ 1 (* 2 &ANCESTORS))))) ;; end TYPE loop
+  	    (transform (from ((. TYPE _ NODE _TOP_bif))) (to ( (. TYPE _ NODE ) TOP)))
+  
+ ;; Also, nonstructurals can go to end:
+  (transform (from ((. N_ NODE *))) (to ()) (prob 1))
+
+
+  ;; nonstructural, emit a hybrid-nucleotide terminal
+  (transform (from ((. N_ NODE)) ) (to ((. hybrid_ NODE _NUC) (. N_ NODE *))) (gaps-ok)
+	     (annotate (row (. N_ NODE)) (column (. hybrid_ NODE _NUC)) (label 1)) 
+
+  (&foreach-ancestor NODE2
+      (? (= NODE NODE2) ()
+      (annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _NUC)) (label 0))))
+  (&foreach-ancestor NODE2
+      (annotate (row (. S_ NODE2 _structBin)) (column (. hybrid_ NODE _NUC)) (label 0)))
+          ) ; end transform
+
+  
+
+  ;; NODE2 loop
+  ;; Transitions to nonstructurals: all other tree nodes
+  (&foreach-ancestor NODE2
+		     ;; S_i_new_k_bif -> S_i new_k
+		     (transform (from ( (. S_ NODE _ NEW_ NODE2 _bif ))) (to ( (. S_ NODE) (. NEW_ NODE2))))
+
+		     ;; NODE3 loop
+		     ;; N_i* -> S_j_N_k_bif -> S_j N_k (a new structural region is generated via the S nonterminal).  
+		     ;; We need a new loop for the 'k' variable
+		     (&foreach-ancestor NODE3 
+					(transform (from ((. N_ NODE *))) ( to ((. S_ NODE2 _ (. NEW_ NODE3) _bif )) ) (prob leaveProb * N2Sprob / ((* &ANCESTORS &ANCESTORS)))) 
+		     
+		     (transform (from (. NEW_ NODE3)) (to (. S_ NODE3)) (prob .333)); Placeholder
+		     (transform (from (. NEW_ NODE3)) (to (. N_ NODE3)) (prob .333)); Placeholder
+		     (transform (from (. NEW_ NODE3)) (to ()) (prob .333)); Placeholder		     
+					 );;end NODE3 loop
+		     (? (!= NODE NODE2)
+			;; N_i* -> N_j ( here i=NODE and j=NODE2 )
+			(transform (from ((. N_ NODE *))) (to ( (. N_ NODE2 ) )) (prob leaveProb * N2Nprob / (+ &ANCESTORS -1)))  
+			;; Else: transition to self.  N_i* -> N_i
+		       (transform (from ((. N_ NODE *))) (to ((. N_ NODE))) (prob stayProb))) ;; end if-else  NODE1 != NODE2
+		        );; end NODE2 loop
+
+  
+  ;; structural nonterminal:
+  ;; The S nonterminal (currently) is then transformed via the pfold grammar:
+  ;; S -> B
+  ;; L -> B
+  ;; B -> L S 
+  ;; L -> F
+  ;; L -> U
+  ;; U -> NUC
+  ;; F -> LNUC F* RNUC
+  ;; F* -> F
+  ;; F* -> B
+  
+  ;; State S 
+  (transform (from ((. S_ NODE))) (to ((. L_ NODE))) (prob beginStem))
+  (transform (from ((. S_ NODE))) (to ((. B_ NODE))) (prob lengthenStem))
+
+  ;; state F
+  (transform (from ((. F_ NODE))) (to ((. hybrid_ NODE _LNUC) (. F_ NODE *) (. hybrid_ NODE _RNUC))) (gaps-ok)
+	     (annotate (row (. S_ NODE)) (column (. hybrid_ NODE _LNUC)) (label <))
+	     (annotate (row (. S_ NODE)) (column (. hybrid_ NODE _RNUC)) (label >))
+  	     (annotate (row (. S_ NODE _structBin)) (column (. hybrid_ NODE _LNUC)) (label 1))
+	     (annotate (row (. S_ NODE _structBin)) (column (. hybrid_ NODE _RNUC)) (label 1))
+	     (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) 
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _LNUC)) (label 0))
+		(annotate (row (. S_ NODE2 _structBin)) (column (. hybrid_ NODE _LNUC)) (label 0))
+		 ) )
+	     (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) 
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _RNUC)) (label 0))
+		(annotate (row (. S_ NODE2 _structBin)) (column (. hybrid_ NODE _RNUC)) (label 0))
+		 )  )  
+	     (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) ()
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _RNUC)) (label 0))
+		 )  )  
+	     (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) ()
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _RNUC)) (label 0))
+		 )  )  
+
+            (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) ()
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _LNUC)) (label 0))
+		 )  )  
+	     (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) ()
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _LNUC)) (label 0))
+		 )  )  
+
+ ) ;; end transform
+
+
+  (transform (from ((. F_ NODE *))) (to ((. F_ NODE))) (prob NEST))
+  (transform (from ((. F_ NODE *))) (to ((. B_ NODE))) (prob nonNEST))
+  
+  ;; state L
+  (transform (from ((. L_ NODE))) (to ((. F_ NODE))) (prob stem))
+  (transform (from ((. L_ NODE))) (to ((. U_ NODE))) (prob loop))
+
+  ;; state B
+  (transform (from ((. B_ NODE))) (to ((. L_ NODE) (. S_ NODE))))
+
+  ;; state U
+  (transform (from ((. U_ NODE))) (to ((. hybrid_ NODE _NUC) (. U_ NODE *))) (gaps-ok)
+	     (annotate (row (. S_ NODE)) (column (. hybrid_ NODE _NUC)) (label -) )
+  	     (annotate (row (. S_ NODE _structBin)) (column (. hybrid_ NODE _NUC)) (label 1) )
+	     (&foreach-ancestor NODE2
+		(? (= NODE2 NODE) ()
+		(annotate (row (. S_ NODE2 _structBin)) (column (. hybrid_ NODE _NUC)) (label 0))
+		 ) )
+             (&foreach-ancestor NODE2
+		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _NUC)) (label 0))
+		 )  )
+
+ (transform (from ((. U_ NODE *))) (to ()) (prob 1)) )
+ 
+
+
+ ;; define the NUC_slow and NUC_regular chains
+ (&foreach
+  TYPE
+  (slow regular)
+
+  ;; Markov chain for residue substitution
+  (chain
+   (update-policy parametric)
+   (terminal ((. NUC_ TYPE)))
+   
+   ;; initial probability distribution
+   (&foreach-token
+    TOK
+    (initial (state (TOK)) (prob (. p TOK))))
+
+   ;; mutation rates
+   (&foreach-token
+    SRC
+    (&foreach-token
+     DEST
+     (?
+      (= SRC DEST)
+      ()
+      (mutate (from (SRC)) (to (DEST)) (rate (((. TYPE _ rate) * (. p DEST))))))))))
+
+
+ ;; define the  (LNUC_slow RNUC_slow)    (LNUC_regular RNUC_regular)  chains
+ (&foreach
+  TYPE
+  (slow regular)
+
+  ;; Markov chain for residue substitution
+  (chain
+   (update-policy parametric)
+   (terminal ((. LNUC_ TYPE) (. RNUC_ TYPE)))
+
+   ;; initial probability distribution
+   (&foreach-token TOK1
+		   (&foreach-token TOK2
+				   (initial (state (TOK1 TOK2)) (prob (. p_ TYPE TOK1 TOK2)))))
+
+   ;; mutation rates
+   (&foreach-token SRC1
+		   (&foreach-token SRC2
+				   (&foreach-token DEST1
+						   (&foreach-token DEST2
+								   (?
+								    (= (. SRC1 SRC2) (. DEST1 DEST2))
+								    ()
+								    (mutate (from (SRC1 SRC2)) (to (DEST1 DEST2)) (rate (. TYPE _ rate) * (. p_ TYPE DEST1 DEST2)))))))))))
+
+(alphabet
+ (name RNA)
+ (token (a c g u))
+ (complement (u g c a))
+ (extend (to n) (from a) (from c) (from g) (from u))
+ (extend (to x) (from a) (from c) (from g) (from u))
+ (extend (to t) (from u))
+ (extend (to r) (from a) (from g))
+ (extend (to y) (from c) (from u))
+ (extend (to m) (from a) (from c))
+ (extend (to k) (from g) (from u))
+ (extend (to s) (from c) (from g))
+ (extend (to w) (from a) (from u))
+ (extend (to h) (from a) (from c) (from u))
+ (extend (to b) (from c) (from g) (from u))
+ (extend (to v) (from a) (from c) (from g))
+ (extend (to d) (from a) (from g) (from u))
+ (wildcard *))
+
