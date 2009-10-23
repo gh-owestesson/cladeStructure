@@ -16,15 +16,15 @@
   ((nonNEST .1) (NEST .9)) ;; probability of additional nested stem pairs, within a structural regime
 
   ;; Initial distribution over single-character states
-  ((&foreach-token TOK ((. p TOK) (/ 1 #TOKENS))))
+  ((&foreach-token TOK ((. p TOK) (/ 1 &TOKENS))))
 
   ;; Initial distribution over di-character states
   ((&foreach-token TOK1 
 		   (&foreach-token TOK2
-				   ((. p_regular TOK1 TOK2) (/ 1 (* #TOKENS #TOKENS))))))
+				   ((. p_regular TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS))))))
   ((&foreach-token TOK1 
 		   (&foreach-token TOK2
-				   ((. p_slow TOK1 TOK2) (/ 1 (* #TOKENS #TOKENS)))))) ) ;; end pgroup
+				   ((. p_slow TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS)))))) ) ;; end pgroup
 
  ;; Define hybrid chains foreach ancestor.  
  ;; Each one will have a hybrid nucleotide and a hybrid structural chain.
@@ -71,7 +71,7 @@
 
   ;; TYPE: loop over transitions into structural states (S or N) from START
   (&foreach TYPE (N)
-	    (transform (from (START)) (to ((. TYPE _ NODE))) (prob (/ 1 (* 2 #ANCESTORS))))) ;; end TYPE loop
+	    (transform (from (START)) (to ((. TYPE _ NODE))) (prob (/ 1 (* 2 &ANCESTORS))))) ;; end TYPE loop
   
  ;; Also, nonstructurals can go to end:
   (transform (from ((. N_ NODE *))) (to ()) (prob 1))
@@ -93,22 +93,22 @@
   ;; NODE2 loop
   ;; Transitions to nonstructurals: all other tree nodes
   (&foreach-ancestor NODE2
-		     ;; S_i_new_k_bif -> S_i new_k
-		     (transform (from ( (. S_ NODE _ NEW_ NODE2 _bif ))) (to ( (. S_ NODE) (. NEW_ NODE2))))
+
 
 		     ;; NODE3 loop
 		     ;; N_i* -> S_j_N_k_bif -> S_j N_k (a new structural region is generated via the S nonterminal).  
 		     ;; We need a new loop for the 'k' variable
 		     (&foreach-ancestor NODE3 
-					(transform (from ((. N_ NODE *))) ( to ((. S_ NODE2 _ (. NEW_ NODE3) _bif )) ) (prob leaveProb * N2Sprob / ((* #ANCESTORS #ANCESTORS)))) 
-		     
-		     (transform (from (. NEW_ NODE3)) (to (. S_ NODE3)) (prob .333)); Placeholder
-		     (transform (from (. NEW_ NODE3)) (to (. N_ NODE3)) (prob .333)); Placeholder
-		     (transform (from (. NEW_ NODE3)) (to ()) (prob .333)); Placeholder		     
+					(transform (from ((. N_ NODE *))) ( to ((. S_ NODE2 _ (. NEW_ NODE3) _bif )) ) (prob leaveProb * N2Sprob / ((* &ANCESTORS &ANCESTORS))))
+		     (transform (from ((. NEW_ NODE3))) (to ((. S_ NODE3))) (prob .333)); Placeholder
+		     (transform (from ((. NEW_ NODE3))) (to ((. N_ NODE3))) (prob .333)); Placeholder
+		     (transform (from ((. NEW_ NODE3))) (to ()) (prob .333)); Placeholder		     
 					 );;end NODE3 loop
+		     ;; S_i_new_k_bif -> S_i new_k
+		     (transform (from ( (. S_ NODE _ NEW_ NODE2 _bif ))) (to ( (. S_ NODE) (. NEW_ NODE2))))
 		     (? (!= NODE NODE2)
 			;; N_i* -> N_j ( here i=NODE and j=NODE2 )
-			(transform (from ((. N_ NODE *))) (to ( (. N_ NODE2 ) )) (prob leaveProb * N2Nprob / (+ #ANCESTORS -1)))  
+			(transform (from ((. N_ NODE *))) (to ( (. N_ NODE2 ) )) (prob leaveProb * N2Nprob / (+ &ANCESTORS -1)))  
 			;; Else: transition to self.  N_i* -> N_i
 		       (transform (from ((. N_ NODE *))) (to ((. N_ NODE))) (prob stayProb))) ;; end if-else  NODE1 != NODE2
 		        );; end NODE2 loop
