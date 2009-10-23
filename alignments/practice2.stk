@@ -1,0 +1,15 @@
+# STOCKHOLM 1.0
+#=GF NH                    ((A:0.1000000000,B:0.1000000000)AB:0.1000000000,(C:0.1000000000,D:0.1000000000)CD:0.1000000000)root;
+A                          ATTAAACGAACTCTGGTG
+B                          AGAACACGAAGCATATTG
+C                          AAAAAACGATCCTTTTTG
+D                          AAAAAACGATCCTTTTTG
+#=GC N_AB        	   111111111110000001
+#=GC N_root 	           000000000000000000
+#=GC N_CD                  000000000000000000
+#=GC S_AB_structBin        000000000000000000
+#=GC S_CD_structBin        000000000001111110
+#=GC S_root_structBin      000000000000000000
+
+
+//
