@@ -71,9 +71,9 @@
   ;; TYPE: loop over transitions into TYPE_TOP (S or N) from START
   (&foreach TYPE (N S)
 
-  	    (transform (from ((. TOP (to ( (. TYPE _ NODE ) TOP)))
-; 	    (transform (from ((. TYPE _ NODE _TOP_bif))) (to ( (. TYPE _ NODE ) TOP)))
-;	    (transform (from (TOP)) (to ((. TYPE _ NODE _TOP_bif))) (prob (/ 1 (* 2 &ANCESTORS))))
+; 	    (transform (from ((. TOP (to ( (. TYPE _ NODE ) TOP)))
+  	    (transform (from ((. TYPE _ NODE _TOP_bif))) (to ( (. TYPE _ NODE ) TOP)))
+	    (transform (from (TOP)) (to ((. TYPE _ NODE _TOP_bif))) (prob (/ 1 (* 2 &ANCESTORS))))
 		(transform (from (TOP)) (to ()) (prob 1))
 		 ) ;; end TYPE loop
 
