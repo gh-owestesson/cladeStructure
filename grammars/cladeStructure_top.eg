@@ -9,8 +9,6 @@
 
  ;; Probability parameters
  (pgroup
-  ((stayProb .5) (leaveProb .5)) ;; probability of staying in or leaving a nonstructural regime
-  ((N2Nprob .5) (N2Sprob .5))  ;; probability of generating a structural regime (N2S), or simply another nonstructural regime (N2N), given that you left a nonstructural regime
   ((beginStem 0.1) (lengthenStem 0.9))
   ((stem 0.9) (loop 0.1))
   ((nonNEST .1) (NEST .9)) ;; probability of additional nested stem pairs, within a structural regime
@@ -72,16 +70,16 @@
  ;;   and S states which emit hybrid structures.  S states are transformed via pfold-like rules.
  ;;   The TOP nonterminal gives rise to N and S nonterminals like this:
 
- ;;   N_i -> xN_i*
- ;;   N_i* -> N_i (prob stayProb)
- ;;   N_i* -> N_j (j!= i) (prob leaveProb)
+;;   START -> TOP
 
- ;;                     N_i* -> S_j_new_k_bif (prob N2S)                
- ;;                     S_j_new_k_bif -> S_j new_k
+;;   TOP -> N_i TOP
+;;   TOP -> S_i TOP (lots of S rules, described later)
+;;   TOP -> END
 
- ;;                     new_k -> S_k
- ;;                     new_k -> N_k
- ;;                     new_k -> ()
+;;   N_i -> xN_i*
+;;   N_i* -> N_i 
+;;   N_i* -> END
+
 
 
 (transform (from (START))(to (TOP))(prob 1))
