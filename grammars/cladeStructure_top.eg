@@ -22,10 +22,30 @@
   ((&foreach-token TOK1 
 		   (&foreach-token TOK2
 				   ((. p_regular TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS))))))
-  ((&foreach-token TOK1 
-		   (&foreach-token TOK2
-				   ((. p_slow TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS)))))) ) ;; end pgroup
 
+  ;; initial probability distribution
+ ((p_slowaa 0.001167)
+  (p_slowca 0.001806)
+  (p_slowga 0.001058)
+  (p_slowua 0.177977)
+  (p_slowac 0.001806)
+  (p_slowcc 0.000391)
+  (p_slowgc 0.266974)
+  (p_slowuc 0.000763)
+  (p_slowag 0.001058)
+  (p_slowcg 0.266974)
+  (p_slowgg 0.000406)
+  (p_slowug 0.049043)
+  (p_slowau 0.177977)
+  (p_slowcu 0.000763)
+  (p_slowgu 0.049043)
+  (p_slowuu 0.002793))
+
+
+;;   ((&foreach-token TOK1 
+;; 		   (&foreach-token TOK2
+;;				   ((. p_slow TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS))))))
+  ); end pgroup	   
  ;; Define hybrid chains foreach ancestor.  
  ;; Each one will have a hybrid nucleotide and a hybrid structural chain.
  (&foreach-ancestor NODE
@@ -64,7 +84,7 @@
  ;;                     new_k -> ()
 
 
-
+(transform (from (START))(to (TOP))(prob 1))
  ;; NODE: Main loop over branches
  (&foreach-ancestor
   NODE
@@ -90,6 +110,7 @@
 
   ;; Nonstructurals can go to end:
   (transform (from ((. N_ NODE *))) (to ()) (prob 1))
+
   ;; Transition only is to self.  N_i* -> N_i
   (transform (from ((. N_ NODE *))) (to ((. N_ NODE))) (prob 1)) 
 
@@ -149,6 +170,7 @@
 
   (transform (from ((. F_ NODE *))) (to ((. F_ NODE))) (prob NEST))
   (transform (from ((. F_ NODE *))) (to ((. B_ NODE))) (prob nonNEST))
+;  (transform (from ((. F_ NODE *))) (to ()) (prob 1))
   
   ;; state L
   (transform (from ((. L_ NODE))) (to ((. F_ NODE))) (prob stem))
