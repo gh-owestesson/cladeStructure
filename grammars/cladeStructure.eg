@@ -9,10 +9,10 @@
 
  ;; Probability parameters
  (pgroup
-  ((stayProb .5) (leaveProb .5)) ;; probability of staying in or leaving a nonstructural regime
-  ((N2Nprob .5) (N2Sprob .5))  ;; probability of generating a structural regime (N2S), or simply another nonstructural regime (N2N), given that you left a nonstructural regime
   ((beginStem 0.1) (lengthenStem 0.9))
   ((stem 0.9) (loop 0.1))
+  ((newS .001) (newN .001) (END .998))
+  ((endN .001) (continueN .999))
   ((nonNEST .1) (NEST .9)) ;; probability of additional nested stem pairs, within a structural regime
 
   ;; Initial distribution over single-character states
@@ -22,10 +22,30 @@
   ((&foreach-token TOK1 
 		   (&foreach-token TOK2
 				   ((. p_regular TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS))))))
-  ((&foreach-token TOK1 
-		   (&foreach-token TOK2
-				   ((. p_slow TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS)))))) ) ;; end pgroup
 
+  ;; initial probability distribution
+ ((p_slowaa 0.001167)
+  (p_slowca 0.001806)
+  (p_slowga 0.001058)
+  (p_slowua 0.177977)
+  (p_slowac 0.001806)
+  (p_slowcc 0.000391)
+  (p_slowgc 0.266974)
+  (p_slowuc 0.000763)
+  (p_slowag 0.001058)
+  (p_slowcg 0.266974)
+  (p_slowgg 0.000406)
+  (p_slowug 0.049043)
+  (p_slowau 0.177977)
+  (p_slowcu 0.000763)
+  (p_slowgu 0.049043)
+  (p_slowuu 0.002793))
+
+
+;;   ((&foreach-token TOK1 
+;; 		   (&foreach-token TOK2
+;;				   ((. p_slow TOK1 TOK2) (/ 1 (* &TOKENS &TOKENS))))))
+  ); end pgroup	   
  ;; Define hybrid chains foreach ancestor.  
  ;; Each one will have a hybrid nucleotide and a hybrid structural chain.
  (&foreach-ancestor NODE
@@ -50,68 +70,49 @@
  ;; Higher-level production rules: 
  ;;   basically, there are N nonterminals for each internal node, which emit hybrid nucleotides
  ;;   and S states which emit hybrid structures.  S states are transformed via pfold-like rules.
- ;;   Rules relating S and N are like this:
- ;;   N_i -> xN_i*
- ;;   N_i* -> N_i (prob stayProb)
- ;;   N_i* -> N_j (j!= i) (prob leaveProb)
+ ;;   The TOP nonterminal gives rise to N and S nonterminals like this:
 
- ;;                     N_i* -> S_j_new_k_bif (prob N2S)                
- ;;                     S_j_new_k_bif -> S_j new_k
+;;   START -> TOP
 
- ;;                     new_k -> S_k
- ;;                     new_k -> N_k
- ;;                     new_k -> ()
+;;   TOP -> N_i TOP
+;;   TOP -> S_i TOP (lots of S rules, described later)
+;;   TOP -> END
+
+;;   N_i -> xN_i*
+;;   N_i* -> N_i 
+;;   N_i* -> END
 
 
 
+(transform (from (START))(to (TOP))(prob 1))
  ;; NODE: Main loop over branches
  (&foreach-ancestor
   NODE
-;;  (nonterminal (. NEW_ NODE))  ; must I declare nonterminals here? 
+  ;; TYPE: loop over transitions into TYPE_TOP (S or N) from START
+  (&foreach TYPE (N S)
 
-  ;; TYPE: loop over transitions into structural states (S or N) from START
-  (&foreach TYPE (N)
-	    (transform (from (START)) (to ((. TYPE _ NODE))) (prob (/ 1 (* 2 &ANCESTORS))))) ;; end TYPE loop
-  
- ;; Also, nonstructurals can go to end:
-  (transform (from ((. N_ NODE *))) (to ()) (prob 1))
-
+  	    (transform (from ((. TYPE _ NODE _TOP_bif))) (to ( (. TYPE _ NODE ) TOP)))
+;	    (transform (from (TOP)) (to ((. TYPE _ NODE _TOP_bif))) (prob (newRegion )))
+	    (transform (from (TOP)) (to ((. TYPE _ NODE _TOP_bif))) (prob (. new TYPE) ))
+		(transform (from (TOP)) (to ()) (prob END))
+		 ) ;; end TYPE loop
 
   ;; nonstructural, emit a hybrid-nucleotide terminal
   (transform (from ((. N_ NODE)) ) (to ((. hybrid_ NODE _NUC) (. N_ NODE *))) (gaps-ok)
-	     (annotate (row (. N_ NODE)) (column (. hybrid_ NODE _NUC)) (label 1)) 
+	     (annotate (row (. N_ NODE)) (column (. hybrid_ NODE _NUC)) (label 1))
 
   (&foreach-ancestor NODE2
       (? (= NODE NODE2) ()
       (annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _NUC)) (label 0))))
   (&foreach-ancestor NODE2
       (annotate (row (. S_ NODE2 _structBin)) (column (. hybrid_ NODE _NUC)) (label 0)))
-          ) ; end transform
+         )  ; end transform
 
-  
+  ;; Nonstructurals can go to end:
+  (transform (from ((. N_ NODE *))) (to ()) (prob endN))
 
-  ;; NODE2 loop
-  ;; Transitions to nonstructurals: all other tree nodes
-  (&foreach-ancestor NODE2
-
-
-		     ;; NODE3 loop
-		     ;; N_i* -> S_j_N_k_bif -> S_j N_k (a new structural region is generated via the S nonterminal).  
-		     ;; We need a new loop for the 'k' variable
-		     (&foreach-ancestor NODE3 
-					(transform (from ((. N_ NODE *))) ( to ((. S_ NODE2 _ (. NEW_ NODE3) _bif )) ) (prob leaveProb * N2Sprob / ((* &ANCESTORS &ANCESTORS))))
-		     (transform (from ((. NEW_ NODE3))) (to ((. S_ NODE3))) (prob .333)); Placeholder
-		     (transform (from ((. NEW_ NODE3))) (to ((. N_ NODE3))) (prob .333)); Placeholder
-		     (transform (from ((. NEW_ NODE3))) (to ()) (prob .333)); Placeholder		     
-					 );;end NODE3 loop
-		     ;; S_i_new_k_bif -> S_i new_k
-		     (transform (from ( (. S_ NODE _ NEW_ NODE2 _bif ))) (to ( (. S_ NODE) (. NEW_ NODE2))))
-		     (? (!= NODE NODE2)
-			;; N_i* -> N_j ( here i=NODE and j=NODE2 )
-			(transform (from ((. N_ NODE *))) (to ( (. N_ NODE2 ) )) (prob leaveProb * N2Nprob / (+ &ANCESTORS -1)))  
-			;; Else: transition to self.  N_i* -> N_i
-		       (transform (from ((. N_ NODE *))) (to ((. N_ NODE))) (prob stayProb))) ;; end if-else  NODE1 != NODE2
-		        );; end NODE2 loop
+  ;; Transition only is to self.  N_i* -> N_i
+  (transform (from ((. N_ NODE *))) (to ((. N_ NODE))) (prob continueN)) 
 
   
   ;; structural nonterminal:
@@ -145,7 +146,7 @@
 		(? (= NODE2 NODE) 
 		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _RNUC)) (label 0))
 		(annotate (row (. S_ NODE2 _structBin)) (column (. hybrid_ NODE _RNUC)) (label 0))
-		 )  )  
+		 )  )
 	     (&foreach-ancestor NODE2
 		(? (= NODE2 NODE) ()
 		(annotate (row (. N_ NODE2)) (column (. hybrid_ NODE _RNUC)) (label 0))
@@ -169,6 +170,7 @@
 
   (transform (from ((. F_ NODE *))) (to ((. F_ NODE))) (prob NEST))
   (transform (from ((. F_ NODE *))) (to ((. B_ NODE))) (prob nonNEST))
+;  (transform (from ((. F_ NODE *))) (to ()) (prob 1))
   
   ;; state L
   (transform (from ((. L_ NODE))) (to ((. F_ NODE))) (prob stem))
